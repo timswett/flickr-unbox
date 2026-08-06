@@ -133,14 +133,22 @@ def main():
     print("Generating alldata_sim/ cases...")
 
     # --- Case 1: standard <id>_<secret>_o.jpg shape, full metadata ---
+    # GPS is Sugarlands Visitor Center, Great Smoky Mountains NP (35.685790,
+    # -83.536770) -- the most-visited US National Park in 2025 (11.53M
+    # visits, NPS stats). Deliberately a real, public, famous landmark
+    # rather than an invented-looking number: lets a real photo viewer
+    # (Apple Photos, etc.) actually anchor the test file to a real place,
+    # while carrying none of the privacy risk of a real *personal* location
+    # (see the incident note near the bottom of this file for why that
+    # distinction matters here).
     make_jpeg(alldata / "4700000001_a1b2c3d4e5_o.jpg")
     write_json(alldata / "photo_4700000001.json", flickr_json(
-        name="Harbor at dusk",
-        description="Taken from the pier",
+        name="Sugarlands overlook",
+        description="Morning fog over the Smokies",
         date_taken="2017-08-02 19:44:10",
-        lat="12345678", lon="-87654321", acc="16",
-        tags=["harbor", "dusk", "boston"],
-        albums=[{"title": "New England Trip", "id": "72157600000001", "url": "https://flickr.com/albums/1"}],
+        lat="35685790", lon="-83536770", acc="16",
+        tags=["smokymountains", "sugarlands", "tennessee"],
+        albums=[{"title": "Smoky Mountains Trip", "id": "72157600000001", "url": "https://flickr.com/albums/1"}],
     ))
     expected_rows.append(("OK", "4700000001_a1b2c3d4e5_o.jpg", "4700000001.jpg"))
     expected_rows.append(("OK", "photo_4700000001.json", "4700000001.json"))
@@ -163,10 +171,15 @@ def main():
     expected_rows.append(("OK", "photo_4700000003.json", "4700000003.json"))
 
     # --- Case 4: <basefilename>_<id>_o.jpg, no secret, GPS present, no tags ---
+    # GPS is Zion Canyon Visitor Center, Zion NP (37.298393, -113.026514) --
+    # #2 most-visited US National Park in 2025 (4.9M visits). Name stays
+    # the generic camera-default "IMG_1234" deliberately (that's what this
+    # case is testing -- an untitled, no-tags file is realistic regardless
+    # of location, so it doesn't need park-specific flavor text).
     make_jpeg(alldata / "IMG_1234_4700000004_o.jpg")
     write_json(alldata / "photo_4700000004.json", flickr_json(
         name="IMG_1234",
-        lat="45123456", lon="-93654321", acc="11",
+        lat="37298393", lon="-113026514", acc="11",
     ))
     expected_rows.append(("OK", "IMG_1234_4700000004_o.jpg", "4700000004.jpg"))
     expected_rows.append(("OK", "photo_4700000004.json", "4700000004.json"))
@@ -332,8 +345,11 @@ def main():
         geo = [{"latitude": lat, "longitude": lon, "accuracy": acc}] if lat else []
         write_json(path, {"geo": geo})
 
-    write_pretty_geo_json(gps_dir / "needs_fix_before.json", "12345678", "-87654321")
-    write_pretty_geo_json(gps_dir / "needs_fix_after_expected.json", "12.345678", "-87.654321")
+    # GPS is Old Faithful, Yellowstone NP (44.460479, -110.828138) -- #3
+    # most-visited US National Park in 2025 (4.7M visits). Same
+    # real-public-landmark rationale as Case 1 above.
+    write_pretty_geo_json(gps_dir / "needs_fix_before.json", "44460479", "-110828138")
+    write_pretty_geo_json(gps_dir / "needs_fix_after_expected.json", "44.460479", "-110.828138")
     write_pretty_geo_json(gps_dir / "no_gps_noop_before.json", "", "")
     write_pretty_geo_json(gps_dir / "no_gps_noop_after_expected.json", "", "")
 
@@ -341,7 +357,7 @@ def main():
     # the raw perl substitution `s/("(longitude|latitude)": ".*)(\d{6})/\1.\3/`
     # is NOT idempotent by itself -- run standalone against an
     # already-fixed value, it inserts a second decimal point (verified:
-    # "12.345678" -> "12..345678"). What actually makes the real pipeline
+    # "44.460479" -> "44..460479"). What actually makes the real pipeline
     # safe is the *guard* in gps_fix.sh: `grep -qE '"(longitude|latitude)":
     # "-?[0-9]+"'` only matches when the value is purely digits immediately
     # followed by the closing quote -- a decimal point breaks that, so the
@@ -349,8 +365,8 @@ def main():
     # Python port must replicate the guard+fix as a pair, not just the
     # substitution -- reimplementing "needs fixing" more loosely (e.g.
     # "no '.' anywhere in the value") would reintroduce the double-dot bug.
-    write_pretty_geo_json(gps_dir / "already_decimal_noop_before.json", "12.345678", "-87.654321")
-    write_pretty_geo_json(gps_dir / "already_decimal_noop_after_expected.json", "12.345678", "-87.654321")
+    write_pretty_geo_json(gps_dir / "already_decimal_noop_before.json", "44.460479", "-110.828138")
+    write_pretty_geo_json(gps_dir / "already_decimal_noop_after_expected.json", "44.460479", "-110.828138")
     print("Wrote gps_fix_samples/ before/after pairs")
 
     # --- Manifest ---
@@ -363,10 +379,10 @@ Synthetic data only -- no real photos or personal metadata. Safe to commit.
 
 | Case | File(s) | Tests |
 |---|---|---|
-| 1 | `4700000001_a1b2c3d4e5_o.jpg` | Standard id_secret_o shape, full metadata (GPS, tags, album) |
+| 1 | `4700000001_a1b2c3d4e5_o.jpg` | Standard id_secret_o shape, full metadata (GPS = Sugarlands Visitor Center, Great Smoky Mountains NP -- #1 most-visited US National Park, 2025; tags, album) |
 | 2 | `video_4700000002.mov` | video_<id> shape, minimal metadata, no GPS/tags |
 | 3 | `sunset-over-the-bay_4700000003_o.jpg` | slug_<id>_o shape (no secret), no GPS |
-| 4 | `IMG_1234_4700000004_o.jpg` | basefilename_<id>_o shape (no secret), GPS present |
+| 4 | `IMG_1234_4700000004_o.jpg` | basefilename_<id>_o shape (no secret), GPS present (Zion Canyon Visitor Center, Zion NP -- #2 most-visited, 2025) |
 | 5 | `4700000005_f9e8d7c6b5_o.jpg` | JSON missing `date_taken` key entirely |
 | 6 | `photo_4700000006.json` (no photo) | Orphan JSON sidecar (simulates pre-dedup removal) |
 | 7 | `4700000007_secret{{aaaa,bbbb}}_o.jpg` | Genuine collision -- two files resolve to same target name |
@@ -395,7 +411,8 @@ Before/after pairs for the GPS decimal-point fix
 gated by a grep guard in `gps_fix.sh` that only matches purely-digit values.
 Three cases: needs the fix, no GPS data (no-op), and already-decimal (no-op
 -- see the code comment in this script for why the raw substitution is
-NOT idempotent on its own and the guard is load-bearing).
+NOT idempotent on its own and the guard is load-bearing). GPS is Old
+Faithful, Yellowstone NP -- #3 most-visited US National Park, 2025.
 """)
     print(f"Wrote {manifest}")
 

@@ -6,10 +6,10 @@ Synthetic data only -- no real photos or personal metadata. Safe to commit.
 
 | Case | File(s) | Tests |
 |---|---|---|
-| 1 | `4700000001_a1b2c3d4e5_o.jpg` | Standard id_secret_o shape, full metadata (GPS, tags, album) |
+| 1 | `4700000001_a1b2c3d4e5_o.jpg` | Standard id_secret_o shape, full metadata (GPS = Sugarlands Visitor Center, Great Smoky Mountains NP -- #1 most-visited US National Park, 2025; tags, album) |
 | 2 | `video_4700000002.mov` | video_<id> shape, minimal metadata, no GPS/tags |
 | 3 | `sunset-over-the-bay_4700000003_o.jpg` | slug_<id>_o shape (no secret), no GPS |
-| 4 | `IMG_1234_4700000004_o.jpg` | basefilename_<id>_o shape (no secret), GPS present |
+| 4 | `IMG_1234_4700000004_o.jpg` | basefilename_<id>_o shape (no secret), GPS present (Zion Canyon Visitor Center, Zion NP -- #2 most-visited, 2025) |
 | 5 | `4700000005_f9e8d7c6b5_o.jpg` | JSON missing `date_taken` key entirely |
 | 6 | `photo_4700000006.json` (no photo) | Orphan JSON sidecar (simulates pre-dedup removal) |
 | 7 | `4700000007_secret{aaaa,bbbb}_o.jpg` | Genuine collision -- two files resolve to same target name |
@@ -38,4 +38,5 @@ Before/after pairs for the GPS decimal-point fix
 gated by a grep guard in `gps_fix.sh` that only matches purely-digit values.
 Three cases: needs the fix, no GPS data (no-op), and already-decimal (no-op
 -- see the code comment in this script for why the raw substitution is
-NOT idempotent on its own and the guard is load-bearing).
+NOT idempotent on its own and the guard is load-bearing). GPS is Old
+Faithful, Yellowstone NP -- #3 most-visited US National Park, 2025.
