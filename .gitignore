@@ -1,0 +1,13 @@
+# Real personal data from tools/build_private_test_fixture.sh — never commit
+private_test_output/
+*_private/
+
+# OS junk
+.DS_Store
+._*
+
+# Editor/tooling
+.vscode/
+.idea/
+__pycache__/
+*.pyc

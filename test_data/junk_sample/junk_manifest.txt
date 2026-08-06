@@ -1,0 +1,6 @@
+These files should be deleted by a correct junk-sweep step:
+  ._4700000001_a1b2c3d4e5_o.jpg
+  .DS_Store
+  photo_4700000001.json.bak
+This file should survive the sweep:
+  real_file_not_junk.jpg

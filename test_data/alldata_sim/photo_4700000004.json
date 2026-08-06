@@ -1,0 +1,15 @@
+{
+  "id": "",
+  "name": "IMG_1234",
+  "description": "",
+  "date_taken": "2018-06-15 14:22:03",
+  "geo": [
+    {
+      "latitude": "45123456",
+      "longitude": "-93654321",
+      "accuracy": "11"
+    }
+  ],
+  "tags": [],
+  "count_tags": "0"
+}

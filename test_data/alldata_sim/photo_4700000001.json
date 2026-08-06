@@ -1,0 +1,32 @@
+{
+  "id": "",
+  "name": "Harbor at dusk",
+  "description": "Taken from the pier",
+  "date_taken": "2017-08-02 19:44:10",
+  "geo": [
+    {
+      "latitude": "12345678",
+      "longitude": "-87654321",
+      "accuracy": "16"
+    }
+  ],
+  "tags": [
+    {
+      "tag": "harbor"
+    },
+    {
+      "tag": "dusk"
+    },
+    {
+      "tag": "boston"
+    }
+  ],
+  "count_tags": "3",
+  "albums": [
+    {
+      "title": "New England Trip",
+      "id": "72157600000001",
+      "url": "https://flickr.com/albums/1"
+    }
+  ]
+}
