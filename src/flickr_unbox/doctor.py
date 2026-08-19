@@ -48,7 +48,9 @@ class DoctorResult:
 
 def _default_exiftool_version(exiftool_bin: str) -> Optional[str]:
     try:
-        result = subprocess.run(
+        # List-form argv, no shell=True; exiftool_bin is a fixed default or an
+        # explicit CLI flag, never derived from file/data content.
+        result = subprocess.run(  # nosec B603
             [exiftool_bin, "-ver"], capture_output=True, text=True, timeout=5
         )
         return result.stdout.strip() or None

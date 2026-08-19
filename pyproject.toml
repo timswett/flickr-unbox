@@ -19,3 +19,10 @@ fixtures = ["pillow"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.bandit]
+# B404 (import subprocess) fires on the bare import itself, with no signal
+# beyond "this file uses subprocess" -- the actual call sites are reviewed
+# individually with inline `# nosec B603` + a reason, so this rule adds
+# nothing actionable project-wide.
+skips = ["B404"]

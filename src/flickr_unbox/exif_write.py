@@ -208,10 +208,15 @@ def _default_process_runner(cmd: List[str], cwd: Path) -> str:
     log file and `tail -f`-ing it still works exactly like the bash version),
     while also returning the full captured text for parse_output()."""
     lines: List[str] = []
-    proc = subprocess.Popen(
+    # List-form argv (see build_command()), no shell=True.
+    proc = subprocess.Popen(  # nosec B603
         cmd, cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1
     )
-    assert proc.stdout is not None
+    # An explicit check, not `assert`: stdout=PIPE above guarantees this never
+    # fires, but `assert` is stripped under `python -O` -- a bare `for line in
+    # None` would then raise a confusing TypeError instead of failing clearly.
+    if proc.stdout is None:
+        raise RuntimeError("subprocess.Popen with stdout=PIPE unexpectedly produced no stdout pipe")
     for line in proc.stdout:
         print(line, end="")
         lines.append(line)
