@@ -115,13 +115,13 @@ fixture from your own real export to try this sequence on first.
 
 ## Test fixtures
 
-`generate_test_fixtures.py` generates a small, fully synthetic test
+`tools/generate_test_fixtures.py` generates a small, fully synthetic test
 corpus (`test_data/`) covering every edge case above, with a
 hand-verified `expected_rename_plan.tsv` as ground truth. No real photos
 or personal data — safe to commit and run in CI.
 
 ```
-python3 generate_test_fixtures.py
+python3 tools/generate_test_fixtures.py
 ```
 
 Requires `pip install pillow` for real JPEG bytes and `ffmpeg` on PATH

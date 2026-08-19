@@ -36,7 +36,7 @@ FIXTURE_CASES = {
 }
 
 
-@pytest.mark.skipif(not SAMPLES.is_dir(), reason="run generate_test_fixtures.py first")
+@pytest.mark.skipif(not SAMPLES.is_dir(), reason="run tools/generate_test_fixtures.py first")
 @pytest.mark.parametrize("case,expected_fields_fixed", FIXTURE_CASES.items())
 def test_matches_fixture_before_after_pair(case, expected_fields_fixed):
     before = (SAMPLES / f"{case}_before.json").read_text()

@@ -1,4 +1,4 @@
-# Real personal data from tools/build_private_test_fixture.sh — never commit
+# Real personal data from tools/build_private_test_fixture.py — never commit
 private_test_output/
 *_private/
 

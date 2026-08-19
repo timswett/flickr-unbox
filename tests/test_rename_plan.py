@@ -3,12 +3,12 @@ Tests for flickr_unbox.rename_plan.
 
 Unlike flatten/merge_photoinfo, this stage already has full fixture
 coverage from the bash/perl era: test_data/alldata_sim/ + a hand-verified
-expected_rename_plan.tsv (see generate_test_fixtures.py). The main test
+expected_rename_plan.tsv (see tools/generate_test_fixtures.py). The main test
 here is a parity check against that existing golden master, not a
 from-scratch fixture build.
 
 Row order note: expected_rename_plan.tsv's rows are written in the
-synthetic-case definition order in generate_test_fixtures.py, not derived
+synthetic-case definition order in tools/generate_test_fixtures.py, not derived
 from actually running the real build_rename_plan.pl and capturing its
 (differently-ordered, see rename_plan.py's docstring) raw output. So the
 parity check compares rows as a set of (status, old, new) tuples, not
@@ -32,7 +32,7 @@ def _load_expected():
         return {(row["status"], row["old_name"], row["new_name"]) for row in reader}
 
 
-@pytest.mark.skipif(not ALLDATA_SIM.is_dir(), reason="run generate_test_fixtures.py first")
+@pytest.mark.skipif(not ALLDATA_SIM.is_dir(), reason="run tools/generate_test_fixtures.py first")
 def test_matches_golden_master_fixture():
     rows = rename_plan.build_plan(ALLDATA_SIM)
     actual = {(r.status, r.old, r.new) for r in rows}

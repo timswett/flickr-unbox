@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-generate_test_fixtures.py
+tools/generate_test_fixtures.py
 
 Generates a small, synthetic, license-free test fixture that mimics a
 post-merge Flickr export (photo/video files + photo_<id>.json sidecars
@@ -24,8 +24,8 @@ Output:
   <output_dir>/MANIFEST.md           -- human-readable description of
                                          every case and what it's testing
 
-Usage:
-  python3 generate_test_fixtures.py [output_dir]
+Usage (run from the repo root, so the default output_dir lands correctly):
+  python3 tools/generate_test_fixtures.py [output_dir]
   (default output_dir: ./test_data)
 
 Requires Pillow to generate real, valid JPEG bytes (pip install pillow).
