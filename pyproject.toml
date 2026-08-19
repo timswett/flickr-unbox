@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "flickr-unbox"
+version = "0.1.0"
+description = "Restore real EXIF/IPTC metadata into a Flickr data export at scale."
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.9"
+
+[project.scripts]
+flickr-unbox = "flickr_unbox.cli:main"
+
+[project.optional-dependencies]
+dev = ["pytest"]
+fixtures = ["pillow"]
+
+[tool.setuptools.packages.find]
+where = ["src"]

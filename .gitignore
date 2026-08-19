@@ -11,3 +11,10 @@ private_test_output/
 .idea/
 __pycache__/
 *.pyc
+
+# Python packaging/build artifacts
+.venv/
+*.egg-info/
+build/
+dist/
+.pytest_cache/
