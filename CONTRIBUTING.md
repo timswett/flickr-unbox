@@ -49,9 +49,21 @@ rather than left in chat history so the reasoning survives.
   of eyeballed.
 - New pipeline code is validated against the fixture as it's written, not
   after the fact.
-- GitHub Actions will run the test suite automatically on push once the
-  pipeline is far enough along to have a real test runner — fine to do
-  since all fixtures are synthetic, no privacy concern running them in CI.
+- `bandit -r src/ -c pyproject.toml` (Python-specific static security
+  scan) is run periodically and expected to stay clean; findings are
+  either fixed or suppressed inline with `# nosec <code>` plus a one-line
+  reason, never silently ignored.
+- Real-data validation (`tools/build_private_test_fixture.py` against a
+  real Flickr export) is a second, ad hoc tier on top of the synthetic
+  suite — not committed to the repo (needs personal data, can't run in
+  CI), but run against real data before trusting any pipeline change at
+  scale. See `FLICKR_UNBOX_HANDOFF.md` for the two-tier testing plan and
+  what's been validated so far.
+- GitHub Actions will run the synthetic test suite automatically on push —
+  there's now a real test runner (105 tests, all synthetic/hermetic, no
+  privacy concern running them in CI) and this is ready to wire up, just
+  deliberately deferred to its own session rather than bundled into
+  whatever change happens to land next.
 
 ## Script behavior
 
@@ -78,9 +90,10 @@ rather than left in chat history so the reasoning survives.
 
 ## CI
 
-- Not set up yet. Add GitHub Actions to run the test suite on push once
-  there's an actual test runner and enough pipeline code to be worth
-  automating.
+- Not set up yet, though the pipeline and test suite (105 tests) are
+  ready for it. Deliberately deferred to its own session rather than
+  bundled into another change — see `FLICKR_UNBOX_HANDOFF.md` "Remaining
+  work" for current status.
 
 ## Attribution & license
 

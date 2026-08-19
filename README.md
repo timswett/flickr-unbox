@@ -37,10 +37,13 @@ non-obvious problems:
 The pipeline (8 stages, `src/flickr_unbox/`) is implemented in Python and
 runnable via the `flickr-unbox` CLI, ported from a working bash/perl
 pipeline that already processed a real ~100K-file / 300GB+ Flickr export
-successfully. Every stage has been validated against real data, including
-one full 500-file end-to-end run with zero errors — but the Python port
-hasn't yet been run against a full real library at scale, and this repo
-hasn't been published anywhere yet.
+successfully. 105 tests pass (synthetic, hermetic, safe for CI), and a
+`bandit` security pass is clean. Every stage has been validated end to end
+against real data, most recently a 2,321-file run through the full 7-stage
+CLI chain with the real `exiftool` binary — zero errors. The Python port
+hasn't yet been run against the full ~50K-file/300GB+ real library at
+scale (that's a deliberately bigger, more careful step than anything
+validated so far), and GitHub Actions CI isn't wired up yet.
 
 ## Disclaimer — use at your own risk
 
@@ -56,9 +59,10 @@ full validation and prints a summary without changing anything on disk;
 trusting an earlier dry-run; `cleanup` refuses to delete `_original`
 backups unless the matching `exif-write` run reported zero errors; and
 the pipeline has been exercised against both a synthetic fixture suite
-and a real 500-file sample end-to-end with zero errors (see "Status"
-above). None of that amounts to a guarantee. It hasn't been run against
-a full real library at scale, it hasn't been tested on every OS/
+and real-data samples end-to-end with zero errors, most recently a
+2,321-file run (see "Status" above). None of that amounts to a
+guarantee. It hasn't been run against a full real library at scale, it
+hasn't been tested on every OS/
 filesystem/Flickr-export variant that exists, and no amount of
 pre-flight checking eliminates the risk of a bug, an edge case, or a
 mistake in how it's invoked.
@@ -130,8 +134,8 @@ See `test_data/MANIFEST.md` once generated for what each case tests.
 ## tools/ (dev tool, not part of the shipped pipeline)
 
 `tools/build_private_test_fixture.py` builds a small, *private* local test
-set from your own real Flickr export (one photo-batch zip + the account's
-JSON info zips). Reach for it if you want to:
+set from your own real Flickr export (one or more photo-batch zips +
+the account's JSON info zips). Reach for it if you want to:
 
 - **Try flickr-unbox on a small, fast subset before trusting it with your
   whole library.** The script prints the exact `flickr-unbox` command
@@ -143,11 +147,22 @@ JSON info zips). Reach for it if you want to:
 It reuses the pipeline's own ID-matching logic
 (`flickr_unbox.rename_plan.resolve_id`) rather than a separate
 reimplementation, so the fixture it builds is guaranteed to reflect actual
-pipeline behavior.
+pipeline behavior. Multiple photo/video zips (a real full export arrives
+as several, e.g. `data-download-1.zip`, `data-download-2.zip`, ...) are
+merged via the real `flatten` pipeline stage, so a multi-zip fixture
+exercises collision-safe merging the same way a real migration would.
 
 ```
-python tools/build_private_test_fixture.py <photo_zip> <info_zips_dir> <work_dir>
+python tools/build_private_test_fixture.py <photo_source> [<photo_source> ...] <info_zips_dir> <work_dir>
 ```
+
+Each `<photo_source>` is a photo/video export zip, or a directory
+containing one or more of them (matched via `--photo-glob`, default
+`data-download-*.zip`). `<photo_source>` and `<info_zips_dir>` can point
+at the same directory — info zips are found by excluding anything that
+matches `--photo-glob`, so no special folder layout is required. Run
+`python tools/build_private_test_fixture.py --help` for the full options
+and an example.
 
 Output contains your real personal photo/EXIF data — it's local only,
 never commit it (`.gitignore` already excludes `private_test_output/` and
