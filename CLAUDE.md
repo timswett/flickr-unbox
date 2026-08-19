@@ -1,0 +1,123 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## What this is
+
+flickr-unbox restores real EXIF/IPTC metadata (title, description, date,
+GPS, tags) into a Flickr data export, matching each photo/video to its
+separately-exported `photo_<id>.json` sidecar and writing the data in with
+`exiftool`, at up to ~100K-file / 300GB+ scale without running the disk out
+of space. See `README.md` for the full problem description and the
+non-obvious edge cases (ambiguous filename→ID matching, non-decimal GPS
+coordinates, exiftool's `_original` backup doubling disk usage) that drive
+the design below.
+
+## Commands
+
+```
+pip install -e ".[dev]"          # editable install + pytest
+python -m pytest tests/          # full suite (hermetic, no real data or exiftool needed)
+python -m pytest tests/test_gps_fix.py::test_name   # single test
+flickr-unbox doctor              # check exiftool is on PATH
+flickr-unbox <stage> --help      # per-subcommand options
+```
+
+Two dev-only extras beyond `pytest`: `pip install pillow` (for
+`tools/generate_test_fixtures.py` to emit real JPEG bytes) and `exiftool`
+on PATH (for `exif-write` and anything downstream of it — `doctor` checks
+this).
+
+`bandit -r src/ -c pyproject.toml` is the security-scan command; expected
+to report 0 issues (findings are fixed or suppressed inline with
+`# nosec <code>` + a reason, never silently skipped — see `[tool.bandit]`
+in `pyproject.toml`).
+
+## Architecture
+
+**One CLI, one subcommand per pipeline stage**, run in this fixed order:
+
+```
+flatten → merge-photoinfo → rename-plan → rename → gps-fix → exif-batches → exif-write → cleanup
+```
+
+Each stage is `src/flickr_unbox/<stage>.py` with a `run(...) -> RunSummary`
+entry point that `cli.py` wires to an argparse subcommand — `cli.py` is
+deliberately thin (see its own module docstring) and contains no pipeline
+logic itself, just argument parsing and dispatch. Two subcommands
+(`flatten`, `merge-photoinfo`) share one argparse-wiring helper
+(`_add_merge_style_subcommand`) because they're the same "merge N source
+subfolders into one flat dest" shape with only a file filter differing;
+`rename-plan`/`rename` share another (`_add_dest_plan_subcommand`) for the
+"write a plan, then execute it" shape.
+
+**Safety model — read this before touching any stage's control flow.**
+Every subcommand defaults to a dry run: full pre-flight validation +
+full summary printed, nothing on disk changes. `--no-dry-run` is required
+to act for real, and critically **re-runs the same validation from
+current on-disk state** rather than trusting an earlier dry-run — data can
+change between the two invocations. This is why pre-flight logic lives in
+one shared path per stage, not duplicated per mode: a stage physically
+can't skip its own checks under `--no-dry-run`. Full reasoning and a
+per-stage pre-flight-check table are in `FLICKR_UNBOX_HANDOFF.md` under
+"Python port design" — read that before changing what a stage validates or
+when it refuses to proceed.
+
+**Shared internal plumbing** (`src/flickr_unbox/_*.py`, imported by
+multiple stage modules, no CLI subcommand of their own):
+- `_report.py` — `RunSummary`: the counts/notes block every stage prints
+  at the end of a run, in both dry-run and real mode.
+- `_preflight.py` — `PreflightResult` plus `check_source_and_dest()`, the
+  shared source-exists/dest-writable check used by `flatten` and
+  `merge-photoinfo`.
+- `_collision_merge.py` — the actual collision-safe move-planning/
+  execution logic (`plan_moves`, `execute_moves`,
+  `remove_empty_source_dirs`, `find_junk`) that both `flatten.py` and
+  `merge_photoinfo.py` call into, factored out once it became clear they
+  were the same algorithm with a different file filter. Fix a bug here
+  once, both stages get the fix — don't reimplement per stage.
+
+**`cleanup`'s receipt gate is the one deliberate behavior change from the
+original bash pipeline**, not just a mechanical port: it refuses to delete
+a batch's `exiftool _original` backups unless `exif_write.py`'s own
+`batch_dir/batch_{NN}.result.json` receipt (written after every real
+`exif-write` run) confirms zero errors for that exact batch — with
+distinct refusal reasons for a missing receipt, a receipt showing errors,
+and a stale receipt (batch file changed since `exif-write` last ran).
+
+**`rename_plan.resolve_id()` / `photo_json_id()`** are the pipeline's
+canonical filename→ID matching logic and are public specifically so
+`tools/build_private_test_fixture.py` can import and reuse them rather
+than hand-maintaining a second copy that could drift out of sync — if you
+touch matching behavior, that tool's fixtures reflect the change
+automatically.
+
+## Two-tier testing
+
+1. **`tests/`** — synthetic, hermetic, no real data or `exiftool` needed;
+   this is what CI runs (and what you should run after any change).
+   Fixtures live in `test_data/`, generated by
+   `tools/generate_test_fixtures.py` (regenerate with `rm -rf test_data &&
+   python3 tools/generate_test_fixtures.py` from the repo root — its
+   output is committed, so confirm `git diff` is empty after
+   regenerating unless you meant to change a fixture).
+2. **Real-data validation** — ad hoc, not part of the committed suite
+   (needs a real Flickr export, can't run in CI). `tools/
+   build_private_test_fixture.py` builds a small private fixture from a
+   real export; run the full CLI chain against it end to end before
+   trusting a pipeline-logic change at scale. See `FLICKR_UNBOX_HANDOFF.md`
+   for what's already been validated this way and at what file counts.
+
+Never commit anything under `private_test_output/`, `*_private/`, or any
+other real-export-derived output — real personal EXIF/GPS/photo data, kept
+out of the repo by `.gitignore` by design.
+
+## Reference docs in this repo
+
+- `README.md` — user-facing: why this exists, installation, usage,
+  disclaimer.
+- `CONTRIBUTING.md` — project conventions (commenting, commit style,
+  folder structure).
+- `FLICKR_UNBOX_HANDOFF.md` — the full design history and session log;
+  the source of truth for *why* a given safety check or module boundary
+  exists, referenced by name from several module docstrings in `src/`.
