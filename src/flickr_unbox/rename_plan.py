@@ -55,6 +55,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Optional
 
+from ._collision_merge import is_junk
 from ._preflight import PreflightResult
 from ._report import RunSummary
 
@@ -108,7 +109,12 @@ def resolve_id(filename: str, json_ids: set) -> Optional[str]:
 
 def build_plan(dest: Path) -> List[PlanRow]:
     """Compute the full rename plan for dest without touching any files."""
-    files = sorted(p.name for p in dest.iterdir() if p.is_file())
+    # Unlike flatten/merge-photoinfo/exif-batches/exif-write, this stage
+    # previously didn't filter junk -- an AppleDouble file like
+    # "._<id>_<secret>_o.jpg" would resolve to the same numeric ID as its
+    # real counterpart, marking BOTH rows COLLISION and leaving the real
+    # photo un-renamed.
+    files = sorted(p.name for p in dest.iterdir() if p.is_file() and not is_junk(p))
 
     json_ids = set()
     for f in files:

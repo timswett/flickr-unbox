@@ -266,7 +266,10 @@ def main(argv=None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
     if args.command != "doctor":
-        print(doctor.render_banner(doctor.check()))
+        # Only exif-write takes --exiftool-bin; every other subcommand falls
+        # back to the default, same binary doctor.py itself defaults to.
+        exiftool_bin = getattr(args, "exiftool_bin", exif_write.DEFAULT_EXIFTOOL_BIN)
+        print(doctor.render_banner(doctor.check(exiftool_bin)))
     return args.func(args)
 
 

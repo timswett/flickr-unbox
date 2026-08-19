@@ -79,6 +79,22 @@ def test_unresolved_when_no_id_candidate_matches(tmp_path):
     assert rows["no_id_here.jpg"].new == ""
 
 
+def test_appledouble_junk_does_not_collide_with_the_real_file(tmp_path):
+    # A regenerated "._111_secret_o.jpg" resolves to the same numeric ID as
+    # its real counterpart -- without junk filtering, both would compute the
+    # same new name and get marked COLLISION, silently blocking the real
+    # file from ever being renamed.
+    _touch(tmp_path / "111_secret_o.jpg")
+    _touch(tmp_path / "._111_secret_o.jpg")
+    _touch(tmp_path / "photo_111.json")
+
+    rows = {r.old: r for r in rename_plan.build_plan(tmp_path)}
+
+    assert "._111_secret_o.jpg" not in rows
+    assert rows["111_secret_o.jpg"].status == "OK"
+    assert rows["111_secret_o.jpg"].new == "111.jpg"
+
+
 def test_account_level_json_is_skipped_entirely(tmp_path):
     _touch(tmp_path / "albums.json")
     _touch(tmp_path / "photo_111.json")

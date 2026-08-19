@@ -144,3 +144,39 @@ def test_only_numeric_id_json_files_are_considered(tmp_path):
 def test_preflight_fails_on_missing_dest(tmp_path):
     summary = gps_fix.run(tmp_path / "does_not_exist", dry_run=True)
     assert summary.counts["preflight_failed"] == 1
+
+
+def test_warns_when_pre_rename_sidecars_are_present(tmp_path):
+    # gps-fix only recognizes already-renamed "<id>.json" sidecars. Without
+    # this check, running it before `rename` (or on files rename left
+    # un-renamed due to a collision) silently scans 0 files with no hint of
+    # why -- indistinguishable from a legitimate "nothing left to fix" run.
+    dest = tmp_path
+    _touch(dest / "photo_111.json", '{"geo": [{"latitude": "42366702", "longitude": "-110828138"}]}')
+
+    summary = gps_fix.run(dest, dry_run=True)
+
+    assert summary.counts["sidecars_scanned"] == 0
+    assert summary.counts["pre_rename_sidecars_found"] == 1
+    assert any("pre-rename" in n and "1 " in n for n in summary.notes)
+
+
+def test_no_warning_when_only_renamed_sidecars_present(tmp_path):
+    dest = tmp_path
+    _touch(dest / "111.json", '{"geo": [{"latitude": "42366702", "longitude": "-110828138"}]}')
+
+    summary = gps_fix.run(dest, dry_run=True)
+
+    assert "pre_rename_sidecars_found" not in summary.counts
+
+
+def test_sidecar_with_non_ascii_content_round_trips_correctly(tmp_path):
+    dest = tmp_path
+    _touch(dest / "111.json", '{"title": "café – Résumé", "geo": [{"latitude": "42366702", "longitude": "-110828138"}]}')
+
+    summary = gps_fix.run(dest, dry_run=False)
+
+    assert summary.counts["files_fixed"] == 1
+    written = (dest / "111.json").read_text(encoding="utf-8")
+    assert "café – Résumé" in written
+    assert "42.366702" in written

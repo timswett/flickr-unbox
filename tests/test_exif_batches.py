@@ -117,6 +117,45 @@ def test_stale_batch_files_are_removed_on_replan(tmp_path):
     assert (batch_dir / "batch_01.txt").read_text().splitlines() == ["1.jpg"]
 
 
+def test_heic_and_heif_are_recognized_target_extensions(tmp_path):
+    dest = tmp_path
+    _make_file(dest / "1.heic", 10)
+    _make_file(dest / "2.HEIF", 10)
+
+    batches = exif_batches.plan_batches(dest, batch_bytes=1000)
+
+    names = {name for batch in batches for name, _ in batch}
+    assert names == {"1.heic", "2.HEIF"}
+
+
+def test_run_reports_skipped_non_target_files(tmp_path):
+    # A fixed extension allowlist can't cover every format a real export
+    # might contain -- previously these were silently dropped from every
+    # batch forever with no signal to the operator. Now surfaced explicitly.
+    dest = tmp_path / "alldata"
+    _make_file(dest / "1.jpg", 10)
+    _make_file(dest / "1.json", 10)  # sidecar, correctly not "skipped"
+    _make_file(dest / "clip.avi", 10)
+    _make_file(dest / "scan.tiff", 10)
+    batch_dir = tmp_path / "batches"
+
+    summary = exif_batches.run(dest, batch_dir, batch_bytes=1000, dry_run=True)
+
+    assert summary.counts["target_files"] == 1
+    assert summary.counts["skipped_non_target_files"] == 2
+    assert any(".avi" in n and ".tiff" in n for n in summary.notes)
+
+
+def test_run_reports_zero_skipped_when_nothing_is_excluded(tmp_path):
+    dest = tmp_path / "alldata"
+    _make_file(dest / "1.jpg", 10)
+    batch_dir = tmp_path / "batches"
+
+    summary = exif_batches.run(dest, batch_dir, batch_bytes=1000, dry_run=True)
+
+    assert summary.counts["skipped_non_target_files"] == 0
+
+
 def test_preflight_fails_on_missing_dest(tmp_path):
     summary = exif_batches.run(
         tmp_path / "does_not_exist", tmp_path / "batches", batch_bytes=1000, dry_run=True

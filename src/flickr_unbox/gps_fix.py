@@ -73,6 +73,7 @@ from ._preflight import PreflightResult
 from ._report import RunSummary
 
 _SIDECAR_RE = re.compile(r"^[0-9]+\.json$")
+_PRE_RENAME_SIDECAR_RE = re.compile(r"^photo_[0-9]+\.json$", re.IGNORECASE)
 _FIELD_RE = re.compile(r'("(?:latitude|longitude)":\s*")([^"]*)(")')
 _PURE_INT_RE = re.compile(r"^-?[0-9]+$")
 _DECIMAL_RE = re.compile(r"^-?[0-9]+\.[0-9]+$")
@@ -132,8 +133,22 @@ def run(dest: Path, dry_run: bool) -> RunSummary:
     sidecars = sorted(p for p in dest.iterdir() if p.is_file() and _SIDECAR_RE.match(p.name))
     summary.bump("sidecars_scanned", len(sidecars))
 
+    # This stage only recognizes already-renamed "<id>.json" sidecars (see
+    # module docstring: it runs after `rename`). If pre-rename
+    # "photo_<id>.json" sidecars are still present, sidecars_scanned would
+    # otherwise silently read as 0 with no way to tell "already done" apart
+    # from "run out of order" -- surface it explicitly instead.
+    pre_rename = sorted(p for p in dest.iterdir() if p.is_file() and _PRE_RENAME_SIDECAR_RE.match(p.name))
+    if pre_rename:
+        summary.bump("pre_rename_sidecars_found", len(pre_rename))
+        summary.note(
+            f"WARNING: {len(pre_rename)} pre-rename 'photo_<id>.json' sidecar(s) found -- "
+            "gps-fix only processes already-renamed '<id>.json' files. Run `rename` first, "
+            "or check its COLLISION/UNRESOLVED rows if some files were left un-renamed."
+        )
+
     for f in sidecars:
-        fix = fix_text(f.read_text())
+        fix = fix_text(f.read_text(encoding="utf-8"))
         for value in fix.anomalies:
             summary.note(f"ANOMALOUS VALUE (left untouched): {f.name}: {value!r}")
         summary.bump("anomalous_values", len(fix.anomalies))
@@ -147,7 +162,7 @@ def run(dest: Path, dry_run: bool) -> RunSummary:
             continue
 
         try:
-            f.write_text(fix.text)
+            f.write_text(fix.text, encoding="utf-8")
             summary.bump("files_fixed")
             summary.bump("fields_fixed", fix.fields_fixed)
         except OSError as e:

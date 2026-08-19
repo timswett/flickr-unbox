@@ -108,12 +108,23 @@ EXIFTOOL_TAG_ARGS = [
     "-Subject<TagsTag",
 ]
 
-_UPDATED_RE = re.compile(r"^\s*(\d+) image files updated\s*$", re.MULTILINE)
+# Broadened from an exact-text match on "image files updated": all 8 real
+# batches this was originally built from (exif_batch_01.log..08.log, mixing
+# .jpg/.png/.mov) only ever produced that one exact line, but exiftool's own
+# vocabulary is wider than that single sample -- e.g. "N files unchanged"
+# for files with nothing to write, or plausibly "N video files updated" for
+# a batch that happens to be all-video (categorized by type). Summing every
+# matching line instead of expecting exactly one avoids silently under-
+# counting (and tripping cleanup's stale-receipt check) if a real batch ever
+# produces a variant this project's own logs never happened to include.
+_UPDATED_RE = re.compile(r"^\s*(\d+) \w+ files updated\s*$", re.MULTILINE)
+_UNCHANGED_RE = re.compile(r"^\s*(\d+) \w+ files unchanged\s*$", re.MULTILINE)
 _ERRORED_RE = re.compile(r"^\s*(\d+) files weren't updated due to errors\s*$", re.MULTILINE)
 _ERROR_LINE_RE = re.compile(r"^Error: (.+) - (\S+)\s*$", re.MULTILINE)
 _WARNING_LINE_RE = re.compile(r"^Warning: (.+) - (\S+)\s*$", re.MULTILINE)
 
-ProcessRunner = Callable[[List[str], Path], str]
+# (combined stdout+stderr text, process return code)
+ProcessRunner = Callable[[List[str], Path], "Tuple[str, int]"]
 DiskUsageFn = Callable[[Path], "shutil._ntuple_diskusage"]  # noqa: F821 -- typing-only reference
 WhichFn = Callable[[str], Optional[str]]
 
@@ -121,6 +132,7 @@ WhichFn = Callable[[str], Optional[str]]
 @dataclass
 class ExifWriteResult:
     files_updated: int = 0
+    files_unchanged: int = 0
     files_errored: int = 0
     warnings: int = 0
     error_lines: List[Tuple[str, str]] = field(default_factory=list)  # (message, filename)
@@ -158,6 +170,59 @@ def check_free_space(
     return PreflightResult.passed()
 
 
+# The one source key EXIFTOOL_TAG_ARGS relies on that's a literal top-level
+# JSON key (not one synthesized by exiftool from a nested structure, like
+# GeoLatitude/TagsTag are) -- present in every real sidecar validated so
+# far, even when its value is empty. Used as a cheap schema-sanity check,
+# not because Title is more important than the other fields.
+_SCHEMA_CHECK_KEY = "Name"
+_SCHEMA_CHECK_SAMPLE_SIZE = 5
+
+
+def check_sidecar_schema(
+    dest: Path, filenames: List[str], sample_size: int = _SCHEMA_CHECK_SAMPLE_SIZE
+) -> PreflightResult:
+    """
+    Cheap sanity check that this batch's JSON sidecars actually look like
+    the schema EXIFTOOL_TAG_ARGS was built for, before spending real time
+    invoking exiftool. `-tagsfromfile` silently no-ops on a source field
+    that doesn't exist in the sidecar -- it isn't an error -- so a schema
+    mismatch (a different Flickr export era/tool using different JSON key
+    names, plausible for other forks/users of this generalized tool) would
+    otherwise run cleanly with 0 reported errors while writing nothing at
+    all. Samples rather than checking every sidecar (batches can be
+    thousands of files): one structurally different sidecar among many is
+    normal, a batch where NONE of the sample has the most basic expected
+    key is not.
+    """
+    checked = 0
+    for name in filenames[:sample_size]:
+        sidecar = dest / f"{Path(name).stem}.json"
+        if not sidecar.is_file():
+            continue
+        try:
+            data = json.loads(sidecar.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError, UnicodeDecodeError):
+            continue
+        checked += 1
+        # Case-insensitive: exiftool's own -tagsfromfile matching is
+        # case-insensitive (confirmed against real sidecars, which use
+        # lowercase "name" despite EXIFTOOL_TAG_ARGS referencing "Name"),
+        # so the check needs to match that or it flags real, working data.
+        if isinstance(data, dict) and any(k.lower() == _SCHEMA_CHECK_KEY.lower() for k in data):
+            return PreflightResult.passed()
+
+    if checked == 0:
+        return PreflightResult.passed()  # nothing readable to sample -- don't block on this alone
+
+    return PreflightResult.failed(
+        f"none of the {checked} sampled JSON sidecar(s) have a {_SCHEMA_CHECK_KEY!r} key -- "
+        "this looks like a different Flickr export schema than EXIFTOOL_TAG_ARGS was built "
+        "for (-tagsfromfile silently writes nothing for a missing source field rather than "
+        "erroring), so proceeding would likely report 0 errors while writing 0 real fields"
+    )
+
+
 def preflight(
     dest: Path,
     batch_path: Path,
@@ -186,7 +251,11 @@ def preflight(
             f"batch plan may be stale, re-run exif-batches: {preview}{more}"
         )
 
-    if not reasons:  # only trust the size/space check if the file list itself was sound
+    if not reasons:  # only trust these checks if the file list itself was sound
+        schema_result = check_sidecar_schema(dest, filenames)
+        if not schema_result.ok:
+            reasons.extend(schema_result.reasons)
+
         space_result = check_free_space(
             dest, batch_size_bytes(dest, filenames), disk_usage_fn=disk_usage_fn
         )
@@ -203,10 +272,11 @@ def build_command(exiftool_bin: str, batch_path: Path) -> List[str]:
     return [exiftool_bin, *EXIFTOOL_TAG_ARGS, "-progress", "-@", str(batch_path.resolve())]
 
 
-def _default_process_runner(cmd: List[str], cwd: Path) -> str:
+def _default_process_runner(cmd: List[str], cwd: Path) -> Tuple[str, int]:
     """Run cmd, streaming its combined stdout+stderr live (so redirecting to a
     log file and `tail -f`-ing it still works exactly like the bash version),
-    while also returning the full captured text for parse_output()."""
+    while also returning the full captured text and exit code for the
+    caller to interpret."""
     lines: List[str] = []
     # List-form argv (see build_command()), no shell=True.
     proc = subprocess.Popen(  # nosec B603
@@ -221,14 +291,16 @@ def _default_process_runner(cmd: List[str], cwd: Path) -> str:
         print(line, end="")
         lines.append(line)
     proc.wait()
-    return "".join(lines)
+    return "".join(lines), proc.returncode
 
 
 def parse_output(text: str) -> ExifWriteResult:
     result = ExifWriteResult()
-    m = _UPDATED_RE.search(text)
-    if m:
-        result.files_updated = int(m.group(1))
+    # Summed rather than a single .search(): exiftool can emit more than one
+    # "N <word> files updated/unchanged" line in principle (e.g. separate
+    # image/video categories) -- see the regex comments above.
+    result.files_updated = sum(int(n) for n in _UPDATED_RE.findall(text))
+    result.files_unchanged = sum(int(n) for n in _UNCHANGED_RE.findall(text))
     m = _ERRORED_RE.search(text)
     if m:
         result.files_errored = int(m.group(1))
@@ -242,6 +314,7 @@ def write_result_receipt(batch_dir: Path, batch_num: str, result: ExifWriteResul
     payload = {
         "batch_num": batch_num,
         "files_updated": result.files_updated,
+        "files_unchanged": result.files_unchanged,
         "files_errored": result.files_errored,
         "warnings": result.warnings,
         "timestamp": datetime.now(timezone.utc).isoformat(),
@@ -297,21 +370,39 @@ def run(
         return summary
 
     cmd = build_command(exiftool_bin, batch_path)
-    output_text = process_runner(cmd, dest)
+    output_text, returncode = process_runner(cmd, dest)
+
+    if returncode != 0:
+        # A crashed/killed exiftool process (OOM, disk full, SIGTERM) may
+        # print no "files updated"/"files weren't updated" line at all --
+        # parse_output() would then report 0 errors, which could satisfy
+        # cleanup's safety gate despite the batch never actually being
+        # written. Treat a nonzero exit as a hard failure and don't write a
+        # receipt at all, same as if exif-write had never run for real.
+        summary.bump("process_failed")
+        summary.note(
+            f"exiftool exited with code {returncode} -- treating this as a hard failure. "
+            "No result receipt was written; check the full output above for what happened "
+            "before re-running."
+        )
+        return summary
+
     parsed = parse_output(output_text)
 
     summary.bump("files_updated", parsed.files_updated)
+    summary.bump("files_unchanged", parsed.files_unchanged)
     summary.bump("files_errored", parsed.files_errored)
     summary.bump("warnings", parsed.warnings)
     for message, filename in parsed.error_lines:
         summary.note(f"ERROR: {filename}: {message}")
 
-    accounted_for = parsed.files_updated + parsed.files_errored
+    accounted_for = parsed.files_updated + parsed.files_unchanged + parsed.files_errored
     if accounted_for != len(filenames):
         summary.note(
             f"NOTE: batch had {len(filenames)} file(s) but exiftool's summary only "
             f"accounts for {accounted_for} ({parsed.files_updated} updated + "
-            f"{parsed.files_errored} errored) -- worth a manual look at the full output"
+            f"{parsed.files_unchanged} unchanged + {parsed.files_errored} errored) -- "
+            "worth a manual look at the full output"
         )
 
     receipt_path = write_result_receipt(batch_dir, batch_num, parsed)

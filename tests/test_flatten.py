@@ -104,6 +104,25 @@ def test_empty_source_dirs_removed_after_real_run(tmp_path):
     assert not (source_base / "data-download-01").exists()
 
 
+def test_case_insensitive_collision_is_detected_on_case_varying_names(tmp_path):
+    # macOS/APFS (the default filesystem this pipeline actually runs on) is
+    # case-insensitive: two files whose names differ only by case collide on
+    # disk even though they're distinct Python strings. Without this check,
+    # the second shutil.move() would silently land on the same path as the
+    # first, overwriting it with no error, no collision-renamed bump, no log.
+    source_base = tmp_path / "Expanded"
+    dest = tmp_path / "alldata"
+    _touch(source_base / "data-download-01" / "IMG_0099.JPG", "first")
+    _touch(source_base / "data-download-02" / "img_0099.jpg", "second")
+
+    summary = flatten.run(source_base, dest, "data-download-*", dry_run=False)
+
+    assert summary.counts["moved"] == 2
+    assert summary.counts["collision_renamed"] == 1
+    assert (dest / "IMG_0099.JPG").read_text() == "first"
+    assert (dest / "data-download-02_img_0099.jpg").read_text() == "second"
+
+
 def test_preflight_fails_on_missing_source(tmp_path):
     source_base = tmp_path / "does-not-exist"
     dest = tmp_path / "alldata"

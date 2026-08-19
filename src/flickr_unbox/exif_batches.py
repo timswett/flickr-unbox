@@ -42,7 +42,12 @@ from ._report import RunSummary
 
 DEFAULT_BATCH_BYTES = 40 * 1024**3  # 40GB, matches build_exif_batches.pl's default
 
-_TARGET_EXT_RE = re.compile(r"\.(jpe?g|png|gif|mov|mp4)$", re.IGNORECASE)
+# Fixed allowlist -- can't cover every format a real Flickr export might
+# contain (Flickr's supported formats have changed over the platform's
+# history). heic/heif added for modern iPhone-native uploads; anything else
+# not on this list is surfaced explicitly via _skipped_non_target_files()
+# below rather than silently dropped.
+_TARGET_EXT_RE = re.compile(r"\.(jpe?g|png|gif|heic|heif|mov|mp4)$", re.IGNORECASE)
 _BATCH_FILE_RE = re.compile(r"^batch_\d+\.txt$")
 
 Batch = List[Tuple[str, int]]  # [(filename, size_bytes), ...]
@@ -60,6 +65,23 @@ def _target_files(dest: Path) -> List[Tuple[str, int]]:
             continue
         targets.append((p.name, p.stat().st_size))
     return targets
+
+
+def _skipped_non_target_files(dest: Path) -> List[str]:
+    """
+    Files in dest that are neither junk, a JSON sidecar, nor a recognized
+    media extension -- surfaced explicitly rather than silently dropped
+    from every batch forever, since _TARGET_EXT_RE is a fixed allowlist
+    that can't guarantee covering every format a real export contains.
+    """
+    skipped = []
+    for p in sorted(dest.iterdir()):
+        if not p.is_file() or _is_junk(p.name):
+            continue
+        if p.suffix.lower() == ".json" or _TARGET_EXT_RE.search(p.name):
+            continue
+        skipped.append(p.name)
+    return skipped
 
 
 def plan_batches(dest: Path, batch_bytes: int) -> List[Batch]:
@@ -113,6 +135,16 @@ def run(dest: Path, batch_dir: Path, batch_bytes: int, dry_run: bool) -> RunSumm
     summary.bump("target_files", total_files)
     summary.bump("batches", len(batches))
     summary.note(f"total: {total_files} file(s), {total_bytes / 1024**3:.2f} GB across {len(batches)} batch(es)")
+
+    skipped = _skipped_non_target_files(dest)
+    summary.bump("skipped_non_target_files", len(skipped))
+    if skipped:
+        exts = sorted({Path(name).suffix.lower() or "(no extension)" for name in skipped})
+        summary.note(
+            f"{len(skipped)} file(s) in dest don't match the exif-write extension "
+            f"allowlist and won't be batched -- extensions seen: {exts}. If these are "
+            "real media files, extend _TARGET_EXT_RE in exif_batches.py."
+        )
     for i, batch in enumerate(batches, start=1):
         batch_size = sum(size for _name, size in batch)
         summary.note(f"batch_{i:02d}.txt: {len(batch)} file(s), {batch_size / 1024**3:.2f} GB")

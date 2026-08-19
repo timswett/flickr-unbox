@@ -55,7 +55,13 @@ def plan_moves(
     moves: List[Tuple[Path, Path, bool]] = []
     conflicts: List[Tuple[Path, str]] = []
 
-    claimed: Set[str] = {p.name for p in dest.glob("*")} if dest.is_dir() else set()
+    # Compared case-insensitively (macOS/APFS's default): two names that
+    # differ only by case still collide on that filesystem, but plain
+    # Python string membership wouldn't catch it, letting the second
+    # shutil.move() silently overwrite the first with no warning. A
+    # case-sensitive filesystem (most Linux setups) just sees a few extra,
+    # harmless collision-prefix renames -- cheap insurance either way.
+    claimed: Set[str] = {p.name.lower() for p in dest.glob("*")} if dest.is_dir() else set()
     reserved: Set[str] = set()
 
     for parent_dir in sorted(source_base.glob(source_glob)):
@@ -66,15 +72,15 @@ def plan_moves(
                 continue
             name = src.name
             renamed = False
-            if name in claimed or name in reserved:
+            if name.lower() in claimed or name.lower() in reserved:
                 name = f"{parent_dir.name}_{src.name}"
                 renamed = True
-            if name in claimed or name in reserved:
+            if name.lower() in claimed or name.lower() in reserved:
                 conflicts.append(
                     (src, f"target already exists even after collision-prefix: {name}")
                 )
                 continue
-            reserved.add(name)
+            reserved.add(name.lower())
             moves.append((src, dest / name, renamed))
 
     return moves, conflicts
