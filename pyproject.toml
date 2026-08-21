@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "flickr-unbox"
-version = "0.1.0"
+version = "1.5.0"
 description = "Restore real EXIF/IPTC metadata into a Flickr data export at scale."
 readme = "README.md"
 license = { file = "LICENSE" }
