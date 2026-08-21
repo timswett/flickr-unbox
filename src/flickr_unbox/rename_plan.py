@@ -18,7 +18,7 @@ Purpose:
     rejected, resolving the ambiguity in practice (100% match rate on a
     real ~50K-file export).
 
-Edge cases this exists to handle (see FLICKR_UNBOX_HANDOFF.md TODOs #2, #3):
+Edge cases this exists to handle:
     - Collision: two different old names would both compute to the same
       new `<id>.<ext>`. Detected and marked COLLISION, not silently
       resolved -- both sides are left alone by `rename` rather than one

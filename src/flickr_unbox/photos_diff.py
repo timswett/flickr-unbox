@@ -5,11 +5,10 @@ there / needs-manual-review / truly-missing / no-usable-timestamp.
 
 This is new code, not a port. `photos-import` needs an explicit file list
 to act on, but nothing generalized ever produced one -- that step
-previously only existed as ad hoc analysis (see
-`Apple_Flickr_PhotosMatch.md` in the flickrmove repo for the full story).
-It originally used PhotoSweeper (a third-party visual-similarity dedup
-tool) to find candidate "missing" files, but PhotoSweeper's own matching
-turned out to significantly under-match -- many files it called missing
+previously only existed as ad hoc analysis. It originally used
+PhotoSweeper (a third-party visual-similarity dedup tool) to find
+candidate "missing" files, but PhotoSweeper's own matching turned out to
+significantly under-match -- many files it called missing
 already had an Apple Photos item at the same capture instant, just
 visually different enough (recompression, format conversion) to fool
 similarity matching. The method that actually held up was

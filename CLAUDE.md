@@ -66,10 +66,7 @@ to act for real, and critically **re-runs the same validation from
 current on-disk state** rather than trusting an earlier dry-run — data can
 change between the two invocations. This is why pre-flight logic lives in
 one shared path per stage, not duplicated per mode: a stage physically
-can't skip its own checks under `--no-dry-run`. Full reasoning and a
-per-stage pre-flight-check table are in `FLICKR_UNBOX_HANDOFF.md` under
-"Python port design" — read that before changing what a stage validates or
-when it refuses to proceed.
+can't skip its own checks under `--no-dry-run`.
 
 **Optional, macOS-only tail beyond the core 8 stages**: importing `dest`
 into Apple Photos. These five subcommands (`photos-diff -> photos-import
@@ -143,8 +140,7 @@ automatically.
    (needs a real Flickr export, can't run in CI). `tools/
    build_private_test_fixture.py` builds a small private fixture from a
    real export; run the full CLI chain against it end to end before
-   trusting a pipeline-logic change at scale. See `FLICKR_UNBOX_HANDOFF.md`
-   for what's already been validated this way and at what file counts.
+   trusting a pipeline-logic change at scale.
 
 Never commit anything under `private_test_output/`, `*_private/`, or any
 other real-export-derived output — real personal EXIF/GPS/photo data, kept
@@ -156,6 +152,3 @@ out of the repo by `.gitignore` by design.
   disclaimer.
 - `CONTRIBUTING.md` — project conventions (commenting, commit style,
   folder structure).
-- `FLICKR_UNBOX_HANDOFF.md` — the full design history and session log;
-  the source of truth for *why* a given safety check or module boundary
-  exists, referenced by name from several module docstrings in `src/`.

@@ -1,8 +1,7 @@
 """
 Tests for flickr_unbox.flatten.
 
-flatten had zero fixture coverage before this port (see
-FLICKR_UNBOX_HANDOFF.md "TODOs for the Python port") -- these fixtures are
+flatten had zero fixture coverage before this port -- these fixtures are
 built inline per-test with tmp_path rather than via tools/generate_test_fixtures.py,
 since flatten's whole job is reshaping a *multi-folder* source tree, which
 is a different shape of fixture than the post-flatten `alldata_sim/` cases

@@ -13,7 +13,7 @@ Two reasons to reach for this:
   2. **Validate a change you're making to this fork against real-world
      filenames/metadata**, not just the synthetic cases in `test_data/`.
      This is how every stage of the Python port was validated against
-     real data during development -- see `FLICKR_UNBOX_HANDOFF.md`.
+     real data during development.
 
 Multiple photo/video zips (a real full export arrives as several --
 `data-download-1.zip`, `data-download-2.zip`, ...) are handled the same

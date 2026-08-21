@@ -8,7 +8,7 @@ parse_output() tests use text excerpted directly from the real
 exif_batch_01.log/exif_batch_03.log produced by the actual bash migration,
 not guessed formats, so a real-format regression would be caught here.
 Validating against a real exiftool binary and real files is a separate ad
-hoc pass (see FLICKR_UNBOX_HANDOFF.md), not part of this suite.
+hoc pass, not part of this suite.
 """
 import json
 from collections import namedtuple

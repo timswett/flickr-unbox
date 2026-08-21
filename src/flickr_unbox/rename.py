@@ -17,9 +17,7 @@ Safety model -- stale-plan detection (new behavior, not in `rename.sh`):
     **recomputes** what `rename-plan` would produce for `dest`'s current
     contents and compares it against the loaded plan file, row for row. Any
     difference means the plan is stale, and the whole run refuses to start
-    (not just skip the affected rows) until `rename-plan` is re-run. This
-    is the pre-flight check called out in FLICKR_UNBOX_HANDOFF.md's
-    "Python port design" table for this stage.
+    (not just skip the affected rows) until `rename-plan` is re-run.
 
     The per-row MISSING SOURCE / target-collision checks below (ported
     from `rename.sh`) still exist on top of that as defense-in-depth

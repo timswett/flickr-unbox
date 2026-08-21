@@ -4,10 +4,9 @@ flickr-unbox -- single CLI, one subcommand per pipeline stage.
 Every subcommand defaults to a dry run (full validation + summary, nothing
 on disk changes) and requires --no-dry-run to act for real; --no-dry-run
 re-validates from current on-disk state rather than trusting an earlier
-dry-run. See FLICKR_UNBOX_HANDOFF.md "Python port design" for the full
-reasoning -- this file is deliberately thin, one block per stage, so that
-doc stays the source of truth for *why* rather than this file growing its
-own competing explanation.
+dry-run. This file is deliberately thin, one block per stage -- no
+pipeline logic of its own, just argument parsing and dispatch into each
+stage's own module.
 
 Every subcommand other than `doctor` itself prints a one-line environment
 banner (see doctor.py) before doing anything else, in both dry-run and

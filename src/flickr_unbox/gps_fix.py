@@ -10,7 +10,7 @@ Purpose:
     `rename`, since it only looks at already-renamed `<id>.json` sidecars
     (matching `rename.sh`/`gps_fix.sh`'s real pipeline order).
 
-Rewrite from bash (see FLICKR_UNBOX_HANDOFF.md TODO #1):
+Rewrite from bash:
     The original `gps_fix.sh` used a grep guard (`"-?[0-9]+"`) plus a
     non-idempotent perl regex that always splits the *last 6 digits* off
     as the decimal part. That gets two cases wrong: a value with exactly
@@ -54,10 +54,9 @@ Rewrite from bash (see FLICKR_UNBOX_HANDOFF.md TODO #1):
     to tell that happened short of noticing the file was never fixed.
 
 Deliberately not ported: `gps_fix.sh` used `perl -pi.bak`, leaving a
-    `.bak` backup next to every file it touched -- that's the exact source
-    of the 20,140 stray `.bak` files flagged as cleanup debt in
-    `CLAUDE_CODE_HANDOFF.md`. This port doesn't create them: dry-run
-    already previews every change before `--no-dry-run` writes anything,
+    `.bak` backup next to every file it touched -- real cleanup debt in
+    the original bash pipeline at scale. This port doesn't create them:
+    dry-run already previews every change before `--no-dry-run` writes anything,
     which is the safety net used everywhere else in this design, and the
     fix is small/cheap to re-derive (only the GPS fields change; nothing
     is destroyed).

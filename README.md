@@ -39,21 +39,16 @@ and runnable via the `flickr-unbox` CLI, ported from a working bash/perl
 pipeline that already processed a real ~100K-file / 300GB+ Flickr export
 successfully. Every stage has been validated end to end against real data,
 most recently a 2,321-file run through the full 7-stage CLI chain with the
-real `exiftool` binary — zero errors. The Python port hasn't yet been run
-against the full ~50K-file/300GB+ real library at scale (that's a
-deliberately bigger, more careful step than anything validated so far),
-and GitHub Actions CI isn't wired up yet.
+real `exiftool` binary — zero errors.
 
 The optional, macOS-only Apple Photos import tail (`photos-diff` through
 `photos-fix-dates`) is a Python port of scripts that already processed a
 real ~14K-file import in production, hardened through several real
-incidents there (see README's "macOS: importing into Apple Photos"
-section and each module's docstring) — `photos-diff` itself is new code
-built from the same validated method, not a port of an existing script,
-and hasn't yet been run against real data as this Python port (see
-CLAUDE.md).
+incidents there (see "macOS: importing into Apple Photos" below and each
+module's docstring) — `photos-diff` itself is new code built from the
+same validated method, not a port of an existing script (see Disclaimer).
 
-178 tests pass total (synthetic, hermetic, safe for CI, no real
+183 tests pass total (synthetic, hermetic, safe for CI, no real
 osxphotos/Photos.app dependency even for the photos-* stages), and a
 `bandit` security pass is clean.
 
@@ -73,11 +68,14 @@ backups unless the matching `exif-write` run reported zero errors; and
 the pipeline has been exercised against both a synthetic fixture suite
 and real-data samples end-to-end with zero errors, most recently a
 2,321-file run (see "Status" above). None of that amounts to a
-guarantee. It hasn't been run against a full real library at scale, it
-hasn't been tested on every OS/
-filesystem/Flickr-export variant that exists, and no amount of
-pre-flight checking eliminates the risk of a bug, an edge case, or a
-mistake in how it's invoked.
+guarantee. It hasn't been tested on every OS/filesystem/Flickr-export
+variant that exists, and no amount of pre-flight checking eliminates the
+risk of a bug, an edge case, or a mistake in how it's invoked.
+`photos-diff`'s EXIF-timestamp-vs-Photos-library matching specifically is
+new code covered only by synthetic tests, not yet checked against a real
+Photos library — review its output (`confirmed.txt`/`needs_review.txt`/
+`truly_missing.txt`) before feeding `truly_missing.txt` into
+`photos-import`, don't trust it blindly.
 
 This software is provided "as is," without warranty of any kind, and
 the author accepts no liability for data loss, corruption, or any other

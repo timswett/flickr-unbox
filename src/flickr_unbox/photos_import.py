@@ -6,9 +6,8 @@ Ports `import_batch.sh` + `retry_stragglers.sh` (combined into one module
 since they share command-building/report-flag logic -- same reasoning as
 `flatten.py`/`merge_photoinfo.py` sharing `_collision_merge.py`). The
 gotchas below are load-bearing, not decorative -- each maps directly to a
-design choice in the code. Full incident history is in
-`Apple_Flickr_PhotosMatch.md` Sessions 4a-4j (flickrmove repo) if you need
-the "how this was found" story; this is just the operative facts.
+design choice in the code, found the hard way running a real ~14K-file
+import in production.
 
 1. Chunked, not one giant call: Apple Photos' AppleScript-driven import
    can hang mid-run, and when it does, osxphotos's own recovery (killall

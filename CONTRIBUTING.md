@@ -44,8 +44,8 @@ rather than left in chat history so the reasoning survives.
   preview: it runs the stage's *full* pre-flight validation and prints the
   full summary, and only skips the final destructive action. `--no-dry-run`
   re-runs that same validation from current on-disk state rather than
-  trusting an earlier dry-run — see `FLICKR_UNBOX_HANDOFF.md` "Python port
-  design" for the full reasoning.
+  trusting an earlier dry-run, since data can change between the two
+  invocations.
 - Synthetic fixtures only, checked into the repo, with a hand-verified
   "golden master" expected-output file (`expected_rename_plan.tsv`-style)
   so a reimplementation can be diffed against known-correct output instead
@@ -60,13 +60,7 @@ rather than left in chat history so the reasoning survives.
   real Flickr export) is a second, ad hoc tier on top of the synthetic
   suite — not committed to the repo (needs personal data, can't run in
   CI), but run against real data before trusting any pipeline change at
-  scale. See `FLICKR_UNBOX_HANDOFF.md` for the two-tier testing plan and
-  what's been validated so far.
-- GitHub Actions will run the synthetic test suite automatically on push —
-  there's now a real test runner (105 tests, all synthetic/hermetic, no
-  privacy concern running them in CI) and this is ready to wire up, just
-  deliberately deferred to its own session rather than bundled into
-  whatever change happens to land next.
+  scale.
 
 ## Script behavior
 
@@ -93,10 +87,9 @@ rather than left in chat history so the reasoning survives.
 
 ## CI
 
-- Not set up yet, though the pipeline and test suite (105 tests) are
-  ready for it. Deliberately deferred to its own session rather than
-  bundled into another change — see `FLICKR_UNBOX_HANDOFF.md` "Remaining
-  work" for current status.
+- No GitHub Actions workflow configured. The test suite is synthetic/
+  hermetic (no privacy concern running it anywhere) and would run
+  cleanly in CI as-is if one is added.
 
 ## Attribution & license
 

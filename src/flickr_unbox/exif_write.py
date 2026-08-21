@@ -6,9 +6,9 @@ Purpose:
     `<id>.json` sidecar into its matching `<id>.<ext>` photo/video, via
     exiftool's `-tagsfromfile`. The exact tag mapping below was validated
     against 5 diverse real samples (GPS+tags, album, minimal/private,
-    video, title-slug-renamed) before ever touching real data -- see
-    CLAUDE_CODE_HANDOFF.md. Operates one batch at a time (matching
-    `exif_write_batch.sh <NN>`'s real operational workflow: run a batch,
+    video, title-slug-renamed) before ever touching real data. Operates
+    one batch at a time (matching `exif_write_batch.sh <NN>`'s real
+    operational workflow: run a batch,
     review it, `cleanup` it to free space, then move to the next) rather
     than a "do everything" mode, since the per-batch human checkpoint is
     what let a real problem (batch 03's 2 corrupt-EXIF PNGs) get caught
@@ -16,9 +16,9 @@ Purpose:
 
 Live-streamed output (design decision, not a mechanical port choice):
     Bash's script doesn't capture exiftool's output -- it streams straight
-    through, and the real migration's own operating instructions
-    (CLAUDE_CODE_HANDOFF.md) rely on that: `nohup ... > log.txt 2>&1 &`
-    then `tail -f log.txt` to watch a 50+ minute run live. A naive
+    through, and the real migration's own operating practice relied on
+    that: `nohup ... > log.txt 2>&1 &` then `tail -f log.txt` to watch a
+    50+ minute run live. A naive
     `subprocess.run(capture_output=True)` port would silently break that --
     output would only appear after the whole batch finished. Instead,
     `_default_process_runner` streams via `Popen`, printing each line
@@ -37,11 +37,12 @@ TODO #4 -- parsed summary instead of manual log-grep:
     regex set covers every media type actually seen. Every `Error:` line
     is logged individually in the summary (few, actionable);
     `Warning:` lines are only counted (batch 01 alone had 868 of them --
-    logging each would bury the signal), matching the "benign, don't need
-    individual scrutiny" call already made in CLAUDE_CODE_HANDOFF.md.
-    Deliberately NOT adding `-m` (ignore minor errors) -- preserves that
-    same document's reasoning: `-m` would silently downgrade every minor-
-    error class, not just the one already vetted (the IFD0/PNG case).
+    logging each would bury the signal); these were confirmed benign
+    (pre-existing metadata quirks in source files) during the original
+    migration and don't need individual scrutiny. Deliberately NOT adding
+    `-m` (ignore minor errors) -- that would silently downgrade every
+    minor-error class, not just the one already vetted (the IFD0/PNG
+    case below).
 
 TODO #5 -- portable free-space check:
     `shutil.disk_usage(dest).free` replaces bash's BSD-only `stat -f`/
@@ -92,9 +93,9 @@ from ._report import RunSummary
 
 DEFAULT_EXIFTOOL_BIN = "exiftool"
 
-# Validated against 5 diverse real samples before ever touching real data --
-# see CLAUDE_CODE_HANDOFF.md. The "*" wildcard on GPSLatitude*/GPSLongitude*
-# is required: without it, N/S/E/W hemisphere refs don't get set correctly.
+# Validated against 5 diverse real samples before ever touching real data.
+# The "*" wildcard on GPSLatitude*/GPSLongitude* is required: without it,
+# N/S/E/W hemisphere refs don't get set correctly.
 EXIFTOOL_TAG_ARGS = [
     "-tagsfromfile", "%d%f.json",
     "-Title<Name",

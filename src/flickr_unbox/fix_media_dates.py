@@ -2,9 +2,8 @@
 photos-fix-dates -- fix wrong photo dates in Apple Photos after an
 osxphotos import.
 
-Ports the already-mostly-Python `fix_media_dates.py` (see
-`Apple_Flickr_PhotosMatch.md` in the flickrmove repo for how this was
-found).
+Ports the already-mostly-Python `fix_media_dates.py`, found necessary
+while running a real Apple Photos import in production.
 
 Background: `osxphotos import --exiftool` only sets title/description/
 keywords/location -- it never sets the photo's date. Date-setting is left
