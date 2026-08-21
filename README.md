@@ -34,16 +34,28 @@ non-obvious problems:
 
 ## Status
 
-The pipeline (8 stages, `src/flickr_unbox/`) is implemented in Python and
-runnable via the `flickr-unbox` CLI, ported from a working bash/perl
+The core pipeline (8 stages, `src/flickr_unbox/`) is implemented in Python
+and runnable via the `flickr-unbox` CLI, ported from a working bash/perl
 pipeline that already processed a real ~100K-file / 300GB+ Flickr export
-successfully. 105 tests pass (synthetic, hermetic, safe for CI), and a
-`bandit` security pass is clean. Every stage has been validated end to end
-against real data, most recently a 2,321-file run through the full 7-stage
-CLI chain with the real `exiftool` binary — zero errors. The Python port
-hasn't yet been run against the full ~50K-file/300GB+ real library at
-scale (that's a deliberately bigger, more careful step than anything
-validated so far), and GitHub Actions CI isn't wired up yet.
+successfully. Every stage has been validated end to end against real data,
+most recently a 2,321-file run through the full 7-stage CLI chain with the
+real `exiftool` binary — zero errors. The Python port hasn't yet been run
+against the full ~50K-file/300GB+ real library at scale (that's a
+deliberately bigger, more careful step than anything validated so far),
+and GitHub Actions CI isn't wired up yet.
+
+The optional, macOS-only Apple Photos import tail (`photos-diff` through
+`photos-fix-dates`) is a Python port of scripts that already processed a
+real ~14K-file import in production, hardened through several real
+incidents there (see README's "macOS: importing into Apple Photos"
+section and each module's docstring) — `photos-diff` itself is new code
+built from the same validated method, not a port of an existing script,
+and hasn't yet been run against real data as this Python port (see
+CLAUDE.md).
+
+178 tests pass total (synthetic, hermetic, safe for CI, no real
+osxphotos/Photos.app dependency even for the photos-* stages), and a
+`bandit` security pass is clean.
 
 ## Disclaimer — use at your own risk
 
@@ -82,6 +94,10 @@ you accept that risk.
   other command also prints a one-line check of this automatically, so
   you'll see it either way before you get several stages into a
   workflow).
+- Optional, macOS-only: importing into Apple Photos needs
+  [osxphotos](https://github.com/RhetTbull/osxphotos) — see
+  "macOS: importing into Apple Photos" below. Not needed for the core
+  pipeline above.
 
 ## Installation
 
@@ -112,6 +128,61 @@ Add `--no-dry-run` to each once you've reviewed its dry-run output.
 `flickr-unbox <stage> --help` documents each command's full options.
 New to this? `tools/build_private_test_fixture.py` (below) builds a small
 fixture from your own real export to try this sequence on first.
+
+## macOS: importing into Apple Photos (optional)
+
+Everything above works on Windows/Mac/Linux and produces a flattened,
+EXIF-restored directory that's useful with any photo app. If you're on a
+Mac and specifically want that directory imported into **Apple Photos**,
+five more commands are available — macOS-only (they drive Photos.app via
+AppleScript, which doesn't exist elsewhere), and requiring one extra
+dependency:
+
+```
+pip install -e ".[photos]"   # requires Python 3.10+ (osxphotos's own floor)
+flickr-unbox doctor          # now also reports whether osxphotos is on PATH
+```
+
+Run in order, against the same `dest` the core pipeline finished with:
+
+```
+flickr-unbox photos-diff <dest> --out-dir <photos_diff_out/>
+flickr-unbox photos-import <dest> --files-list <photos_diff_out/truly_missing.txt> --album "My Import"
+flickr-unbox photos-verify --intended-files-list <photos_diff_out/truly_missing.txt> --log-file <photos_import_batch/photos_import.log>
+flickr-unbox photos-retry <dest> --files-list <photos_verify_out/errors.txt> --album "My Import" --mode skip-dups
+flickr-unbox photos-fix-dates --album "My Import" --source-dir <dest> --suspect-after <YYYY-MM-DD>
+```
+
+- **`photos-diff`** compares `dest` against your current Photos library by
+  EXIF capture timestamp (not visual similarity — no third-party dedup
+  tool needed) and writes `confirmed.txt`/`needs_review.txt`/
+  `truly_missing.txt`/`no_exif_timestamp.txt`. `truly_missing.txt` is
+  `photos-import`'s input.
+- **`photos-import`** imports that list in chunks. **The screen must stay
+  unlocked and the display must stay on for the entire run** — Photos'
+  AppleScript automation stalls hard on display sleep/lock, confirmed by
+  correlating real hangs against `pmset -g log`. A chunk exiting `rc=0`
+  does **not** guarantee every file in it succeeded — always follow with:
+- **`photos-verify`**, which reconciles the log against the intended list
+  (diffs every logged outcome, not exit codes) and writes
+  `errors.txt`/`missing.txt`/`orphans.txt`/etc. This is the only
+  trustworthy completeness signal.
+- **`photos-retry`** re-attempts stragglers from `photos-verify`'s output
+  **one file at a time** — never batch former burst-siblings together, it
+  re-triggers Photos' burst-photo grouping bug against each other (see
+  below).
+- **`photos-fix-dates`** corrects GIF/PNG (and other source-corrupted-tag)
+  files that Photos silently mis-dated to the import date instead of
+  their real capture date.
+
+Two known, accepted, permanent gaps (not bugs in this tool — confirmed
+Photos-app-level limitations):
+- **Burst-group silent drop**: Photos collapses files sharing an embedded
+  Apple burst-UUID tag down to one surviving asset during import, with
+  zero log output for the rest. No osxphotos flag disables this.
+- **GIF/PNG dates**: Photos doesn't read embedded EXIF dates for these
+  formats on import at all (`photos-fix-dates` corrects it after the
+  fact, but can't prevent it during import).
 
 ## Test fixtures
 

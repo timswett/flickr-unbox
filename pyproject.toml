@@ -16,6 +16,14 @@ flickr-unbox = "flickr_unbox.cli:main"
 [project.optional-dependencies]
 dev = ["pytest"]
 fixtures = ["pillow"]
+# Only needed for the optional, macOS-only photos-diff/photos-import/
+# photos-retry/photos-fix-dates stages (see _osxphotos.py). The core
+# 8-stage pipeline stays stdlib-only. osxphotos itself requires Python
+# 3.10+, a higher floor than this project's own >=3.9 -- `pip install`
+# will surface that directly if attempted on 3.9. photoscript (used by
+# photos-fix-dates) comes in transitively as one of osxphotos's own
+# dependencies.
+photos = ["osxphotos>=0.76.1"]
 
 [tool.setuptools.packages.find]
 where = ["src"]

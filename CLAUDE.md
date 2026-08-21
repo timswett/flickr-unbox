@@ -26,7 +26,10 @@ flickr-unbox <stage> --help      # per-subcommand options
 Two dev-only extras beyond `pytest`: `pip install pillow` (for
 `tools/generate_test_fixtures.py` to emit real JPEG bytes) and `exiftool`
 on PATH (for `exif-write` and anything downstream of it — `doctor` checks
-this).
+this). A third, optional and macOS-only: `pip install -e ".[photos]"`
+(needs Python 3.10+) pulls in `osxphotos` for the `photos-*` subcommands
+that import `dest` into Apple Photos — not needed for the core pipeline
+or its test suite, which stay dependency-free either way.
 
 `bandit -r src/ -c pyproject.toml` is the security-scan command; expected
 to report 0 issues (findings are fixed or suppressed inline with
@@ -35,11 +38,16 @@ in `pyproject.toml`).
 
 ## Architecture
 
-**One CLI, one subcommand per pipeline stage**, run in this fixed order:
+**One CLI, one subcommand per pipeline stage**, run in this fixed order —
+cross-platform (Windows/Mac/Linux), stdlib-only:
 
 ```
 flatten → merge-photoinfo → rename-plan → rename → gps-fix → exif-batches → exif-write → cleanup
 ```
+
+Beyond that, five more subcommands exist for the optional, macOS-only
+step of importing `dest` into Apple Photos — see "Optional, macOS-only
+tail" below before touching any `photos_*.py` module.
 
 Each stage is `src/flickr_unbox/<stage>.py` with a `run(...) -> RunSummary`
 entry point that `cli.py` wires to an argparse subcommand — `cli.py` is
@@ -63,6 +71,29 @@ per-stage pre-flight-check table are in `FLICKR_UNBOX_HANDOFF.md` under
 "Python port design" — read that before changing what a stage validates or
 when it refuses to proceed.
 
+**Optional, macOS-only tail beyond the core 8 stages**: importing `dest`
+into Apple Photos. These five subcommands (`photos-diff -> photos-import
+-> photos-verify -> [photos-retry] -> [photos-fix-dates]`) live in their
+own modules (`photos_diff.py`, `photos_import.py`,
+`verify_photos_import.py`, `fix_media_dates.py`, sharing
+`_osxphotos.py`) and are never imported by the core pipeline modules or
+vice versa. They exist because Apple Photos/AppleScript automation is
+macOS-only, needs the extra `osxphotos` dependency (`pip install
+".[photos]"`, Python 3.10+), and behaves differently from the rest of
+this codebase in one important way: **`rc=0`/a clean exit from
+`photos-import` or `photos-retry` does not mean every file succeeded** --
+Photos' own AppleScript automation can silently lose files around an
+internal auto-recovery, and separately silently drops non-representative
+files from "burst groups" with zero log output at all. `photos-verify`,
+which diffs the intended file list against every logged outcome in the
+run's log file, is the only trustworthy completeness signal for that
+pair of commands -- always run it after, don't trust a green exit code
+the way you more safely can for `exif-write`/`cleanup`. See
+`photos_import.py`'s module docstring for the full list of hard-won
+lessons (screen-lock/display-sleep hangs, the bash-3.2 `mapfile` gotcha
+this was originally ported around, etc.) and README.md's "macOS:
+importing into Apple Photos" section for the user-facing version.
+
 **Shared internal plumbing** (`src/flickr_unbox/_*.py`, imported by
 multiple stage modules, no CLI subcommand of their own):
 - `_report.py` — `RunSummary`: the counts/notes block every stage prints
@@ -76,6 +107,13 @@ multiple stage modules, no CLI subcommand of their own):
   `merge_photoinfo.py` call into, factored out once it became clear they
   were the same algorithm with a different file filter. Fix a bug here
   once, both stages get the fix — don't reimplement per stage.
+- `_osxphotos.py` — the macOS-only tail's equivalent shared plumbing:
+  `preflight_platform_and_binary()` (the platform + `osxphotos`-on-PATH
+  gate every `photos_*.py` stage's own `preflight()` calls into) and
+  `strip_ansi()` (osxphotos's `-V` output embeds raw ANSI escapes even
+  when redirected to a file — `verify_photos_import.py` strips them
+  before parsing; forgetting this once caused a real mis-analysis in the
+  original migration, see that module's docstring).
 
 **`cleanup`'s receipt gate is the one deliberate behavior change from the
 original bash pipeline**, not just a mechanical port: it refuses to delete

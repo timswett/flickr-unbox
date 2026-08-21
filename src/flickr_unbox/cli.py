@@ -22,7 +22,21 @@ import argparse
 import sys
 from pathlib import Path
 
-from . import cleanup, doctor, exif_batches, exif_write, flatten, gps_fix, merge_photoinfo, rename, rename_plan
+from . import (
+    cleanup,
+    doctor,
+    exif_batches,
+    exif_write,
+    fix_media_dates,
+    flatten,
+    gps_fix,
+    merge_photoinfo,
+    photos_diff,
+    photos_import,
+    rename,
+    rename_plan,
+    verify_photos_import,
+)
 
 
 def _add_dry_run_flag(p: argparse.ArgumentParser) -> None:
@@ -202,6 +216,135 @@ def _run_cleanup(args: argparse.Namespace) -> int:
     return 1 if summary.counts.get("preflight_failed") else 0
 
 
+def _add_photos_diff(subparsers: argparse._SubParsersAction) -> None:
+    p = subparsers.add_parser(
+        "photos-diff",
+        help="[macOS, optional] Compare dest against your Apple Photos library, "
+        "write truly_missing.txt for photos-import.",
+    )
+    p.add_argument("dest", type=Path, help="Flattened, EXIF-restored directory to diff")
+    p.add_argument(
+        "--out-dir", type=Path, default=Path("photos_diff_out"),
+        help="Where to write confirmed.txt/needs_review.txt/truly_missing.txt/no_exif_timestamp.txt (default: %(default)s)",
+    )
+    p.add_argument(
+        "--tight-window-s", type=float, default=photos_diff.DEFAULT_TIGHT_WINDOW_S,
+        help="Seconds within which a timestamp match is confirmed (default: %(default)s)",
+    )
+    p.add_argument(
+        "--loose-window-s", type=float, default=photos_diff.DEFAULT_LOOSE_WINDOW_S,
+        help="Seconds within which a timestamp match needs manual review (default: %(default)s)",
+    )
+    p.add_argument("--osxphotos-bin", default="osxphotos", help="osxphotos executable to invoke (default: %(default)s)")
+    p.add_argument("--exiftool-bin", default=exif_write.DEFAULT_EXIFTOOL_BIN, help="exiftool executable to invoke (default: %(default)s)")
+    _add_dry_run_flag(p)
+    p.set_defaults(func=_run_photos_diff)
+
+
+def _run_photos_diff(args: argparse.Namespace) -> int:
+    summary = photos_diff.run(
+        args.dest, args.dry_run,
+        out_dir=args.out_dir, tight_window_s=args.tight_window_s, loose_window_s=args.loose_window_s,
+        osxphotos_bin=args.osxphotos_bin, exiftool_bin=args.exiftool_bin,
+    )
+    summary.print()
+    return 1 if summary.counts.get("preflight_failed") else 0
+
+
+def _add_photos_import(subparsers: argparse._SubParsersAction) -> None:
+    p = subparsers.add_parser(
+        "photos-import",
+        help="[macOS, optional] Chunked import of a file list into Apple Photos via osxphotos.",
+    )
+    p.add_argument("dest", type=Path, help="Directory the listed files live in")
+    p.add_argument("--files-list", type=Path, required=True, help="Basenames to import, one per line, relative to dest")
+    p.add_argument("--album", required=True, help="Target Photos album (created if missing)")
+    p.add_argument("--batch-dir", type=Path, default=Path("photos_import_batch"), help="Where to write the log/report (default: %(default)s)")
+    p.add_argument("--chunk-size", type=int, default=photos_import.DEFAULT_CHUNK_SIZE, help="Files per osxphotos import call (default: %(default)s)")
+    p.add_argument("--stop-on-error", type=int, default=photos_import.DEFAULT_STOP_ON_ERROR, help="osxphotos --stop-on-error threshold (default: %(default)s)")
+    p.add_argument("--osxphotos-bin", default="osxphotos", help="osxphotos executable to invoke (default: %(default)s)")
+    _add_dry_run_flag(p)
+    p.set_defaults(func=_run_photos_import)
+
+
+def _run_photos_import(args: argparse.Namespace) -> int:
+    summary = photos_import.run(
+        args.dest, args.files_list, args.album, args.dry_run,
+        batch_dir=args.batch_dir, chunk_size=args.chunk_size, stop_on_error=args.stop_on_error,
+        osxphotos_bin=args.osxphotos_bin,
+    )
+    summary.print()
+    return 1 if summary.counts.get("preflight_failed") else 0
+
+
+def _add_photos_retry(subparsers: argparse._SubParsersAction) -> None:
+    p = subparsers.add_parser(
+        "photos-retry",
+        help="[macOS, optional] Retry straggler files one at a time (never batched -- see photos_import.py).",
+    )
+    p.add_argument("dest", type=Path, help="Directory the listed files live in")
+    p.add_argument("--files-list", type=Path, required=True, help="Basenames to retry, one per line (e.g. photos-verify's errors.txt/missing.txt/orphans.txt)")
+    p.add_argument("--album", required=True, help="Target Photos album (created if missing)")
+    p.add_argument(
+        "--mode", required=True, choices=photos_import.DUP_MODES,
+        help="skip-dups for genuine per-file errors; allow-duplicates for missing/orphan entries osxphotos's own bookkeeping already believes exist",
+    )
+    p.add_argument("--batch-dir", type=Path, default=Path("photos_import_batch"), help="Where to write the log/report (default: %(default)s)")
+    p.add_argument("--osxphotos-bin", default="osxphotos", help="osxphotos executable to invoke (default: %(default)s)")
+    _add_dry_run_flag(p)
+    p.set_defaults(func=_run_photos_retry)
+
+
+def _run_photos_retry(args: argparse.Namespace) -> int:
+    summary = photos_import.retry(
+        args.dest, args.files_list, args.album, args.mode, args.dry_run,
+        batch_dir=args.batch_dir, osxphotos_bin=args.osxphotos_bin,
+    )
+    summary.print()
+    return 1 if summary.counts.get("preflight_failed") else 0
+
+
+def _add_photos_verify(subparsers: argparse._SubParsersAction) -> None:
+    p = subparsers.add_parser(
+        "photos-verify",
+        help="[macOS, optional] Reconcile a photos-import/photos-retry log against the intended file list. "
+        "No --no-dry-run: this only ever writes report files.",
+    )
+    p.add_argument("--intended-files-list", type=Path, required=True, help="The file list that was fed to photos-import")
+    p.add_argument("--log-file", type=Path, required=True, help="The log file photos-import/photos-retry wrote to")
+    p.add_argument("--out-dir", type=Path, default=Path("photos_verify_out"), help="Where to write intended/added/orphans/errors/dupskipped/missing.txt (default: %(default)s)")
+    p.set_defaults(func=_run_photos_verify)
+
+
+def _run_photos_verify(args: argparse.Namespace) -> int:
+    summary = verify_photos_import.run(args.intended_files_list, args.log_file, args.out_dir)
+    summary.print()
+    return 1 if summary.counts.get("preflight_failed") else 0
+
+
+def _add_photos_fix_dates(subparsers: argparse._SubParsersAction) -> None:
+    p = subparsers.add_parser(
+        "photos-fix-dates",
+        help="[macOS, optional] Fix GIF/PNG (and other source-corrupted-tag) dates Photos mis-imported.",
+    )
+    p.add_argument("--album", required=True, help="Photos album name to check")
+    p.add_argument("--source-dir", type=Path, required=True, help="Directory containing the original source files")
+    p.add_argument("--suspect-after", required=True, help="Find photos dated on/after this date, e.g. 2026-08-01")
+    p.add_argument("--osxphotos-bin", default="osxphotos", help="osxphotos executable to invoke (default: %(default)s)")
+    p.add_argument("--exiftool-bin", default=fix_media_dates.DEFAULT_EXIFTOOL_BIN, help="exiftool executable to invoke (default: %(default)s)")
+    _add_dry_run_flag(p)
+    p.set_defaults(func=_run_photos_fix_dates)
+
+
+def _run_photos_fix_dates(args: argparse.Namespace) -> int:
+    summary = fix_media_dates.run(
+        args.album, args.source_dir, args.suspect_after, args.dry_run,
+        osxphotos_bin=args.osxphotos_bin, exiftool_bin=args.exiftool_bin,
+    )
+    summary.print()
+    return 1 if summary.counts.get("preflight_failed") else 0
+
+
 def _add_doctor(subparsers: argparse._SubParsersAction) -> None:
     p = subparsers.add_parser(
         "doctor",
@@ -212,11 +355,16 @@ def _add_doctor(subparsers: argparse._SubParsersAction) -> None:
         default=exif_write.DEFAULT_EXIFTOOL_BIN,
         help="exiftool executable to look for (default: %(default)s)",
     )
+    p.add_argument(
+        "--osxphotos-bin",
+        default="osxphotos",
+        help="osxphotos executable to look for on macOS (default: %(default)s)",
+    )
     p.set_defaults(func=_run_doctor)
 
 
 def _run_doctor(args: argparse.Namespace) -> int:
-    summary = doctor.run(args.exiftool_bin)
+    summary = doctor.run(args.exiftool_bin, osxphotos_bin=args.osxphotos_bin)
     summary.print()
     return 1 if summary.counts.get("missing") else 0
 
@@ -258,6 +406,14 @@ def build_parser() -> argparse.ArgumentParser:
     _add_exif_batches(subparsers)
     _add_exif_write(subparsers)
     _add_cleanup(subparsers)
+    # Optional, macOS-only tail: importing the restored dest into Apple
+    # Photos. Doesn't exist on Windows/Linux (Photos.app + AppleScript
+    # automation are macOS-only) -- see each module's docstring.
+    _add_photos_diff(subparsers)
+    _add_photos_import(subparsers)
+    _add_photos_retry(subparsers)
+    _add_photos_verify(subparsers)
+    _add_photos_fix_dates(subparsers)
     _add_doctor(subparsers)
     return parser
 

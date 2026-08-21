@@ -12,7 +12,9 @@ from flickr_unbox import cli, doctor
 
 
 def _fake_check(seen):
-    def check(exiftool_bin="exiftool"):
+    # **kwargs swallows osxphotos_bin (and any future doctor.check() args)
+    # -- these tests only care about exiftool_bin selection, see docstring.
+    def check(exiftool_bin="exiftool", **kwargs):
         seen.append(exiftool_bin)
         return doctor.DoctorResult(
             python_version="3.9.0", exiftool_bin=exiftool_bin, exiftool_path=None, exiftool_version=None
@@ -50,3 +52,18 @@ def test_doctor_subcommand_itself_prints_no_banner(monkeypatch, capsys):
     # time for a banner (that would double-print for the one subcommand
     # that already IS the environment check).
     assert seen == ["exiftool"]
+
+
+def test_doctor_passes_through_a_custom_osxphotos_bin(monkeypatch):
+    seen_osxphotos_bins = []
+
+    def fake_check(exiftool_bin="exiftool", osxphotos_bin="osxphotos", **kwargs):
+        seen_osxphotos_bins.append(osxphotos_bin)
+        return doctor.DoctorResult(
+            python_version="3.9.0", exiftool_bin=exiftool_bin, exiftool_path=None, exiftool_version=None
+        )
+
+    monkeypatch.setattr(cli.doctor, "check", fake_check)
+    cli.main(["doctor", "--osxphotos-bin", "/opt/custom/osxphotos"])
+
+    assert seen_osxphotos_bins == ["/opt/custom/osxphotos"]
